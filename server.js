@@ -1,64 +1,47 @@
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const http = require('http');
-const connectDB = require('./config/database');
-const initializeSocket = require('./config/socketIO');
-const errorHandler = require('./middleware/errorHandler');
+const path = require('path');
+const dotenv = require('dotenv');
+const { connectDB } = require('./config/db');
+const { errorHandler, notFound } = require('./middleware/errorMiddleware');
+
+dotenv.config();
+connectDB();
+
+const authRoutes = require('./routes/authRoutes');
+const productRoutes = require('./routes/productRoutes');
+const cartRoutes = require('./routes/cartRoutes');
+const orderRoutes = require('./routes/orderRoutes');
+const reviewRoutes = require('./routes/reviewRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
-// Middleware
-const corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (process.env.NODE_ENV !== 'production') {
-      return callback(null, true);
-    }
-    const allowedOrigins = [process.env.CORS_ORIGIN];
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-};
-app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use('/api/auth', authRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/cart', cartRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/payments', paymentRoutes);
 
-// Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/users', require('./routes/users'));
-app.use('/api/posts', require('./routes/posts'));
-app.use('/api/comments', require('./routes/comments'));
-app.use('/api/messages', require('./routes/messages'));
-app.use('/api/notifications', require('./routes/notifications'));
-
-// Health check
-app.get(['/health', '/api/health'], (req, res) => {
-  res.status(200).json({ success: true, message: 'Server is running' });
+app.get('/api', (req, res) => {
+  res.json({ message: 'Amazon-like e-commerce API running' });
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ success: false, message: 'Route not found' });
-});
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../frontend/dist')));
+  app.get('*', (req, res) => {
+    res.sendFile(path.resolve(__dirname, '../frontend/dist', 'index.html'));
+  });
+}
 
-// Error handling middleware
+app.use(notFound);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-
-const startServer = async () => {
-  await connectDB();
-
-  const server = http.createServer(app);
-  const io = initializeSocket(server);
-
-  server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-};
-
-startServer();
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
